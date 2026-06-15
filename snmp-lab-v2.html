@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNMP Lab Simulator v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #30363d;
+    --green: #39d353;
+    --green-dim: #1a4a2e;
+    --orange: #f78166;
+    --orange-dim: #3d1a0f;
+    --blue: #58a6ff;
+    --blue-dim: #0d2a4a;
+    --yellow: #e3b341;
+    --yellow-dim: #3a2a00;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --muted: #8b949e;
+    --text: #c9d1d9;
+    --text-bright: #f0f6fc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* TOP BAR */
+  #topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  #topbar .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.05em;
+  }
+  #topbar .logo span { color: var(--muted); font-weight: 400; }
+  #topbar .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .badge-cpsa { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); }
+  .badge-safe { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+  #progress-wrap { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  #progress-bar-outer { width: 120px; height: 6px; background: var(--border); border-radius: 3px; }
+  #progress-bar-inner { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.4s; width: 0%; }
+  #progress-label { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 40px; }
+
+  /* MAIN LAYOUT */
+  #main {
+    display: grid;
+    grid-template-columns: 220px 1fr 360px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  #sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #sidebar h3 {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 14px 16px 8px;
+    text-transform: uppercase;
+  }
+  .host-btn {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+    gap: 2px;
+  }
+  .host-btn:hover { background: var(--surface2); }
+  .host-btn.active { border-left-color: var(--green); background: var(--green-dim); }
+  .host-btn .host-ip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-bright);
+  }
+  .host-btn.active .host-ip { color: var(--green); }
+  .host-btn .host-name { font-size: 11px; color: var(--muted); }
+  .host-btn .host-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .tag {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .tag-v1 { background: var(--orange-dim); color: var(--orange); }
+  .tag-v2c { background: var(--yellow-dim); color: var(--yellow); }
+  .tag-telnet { background: var(--orange-dim); color: var(--orange); }
+  .tag-tftp { background: var(--purple); opacity: 0.8; }
+  .tag-http { background: var(--blue-dim); color: var(--blue); }
+  .tag-noauth { background: var(--red); color: #fff; opacity: 0.85; }
+
+  #sidebar .divider { height: 1px; background: var(--border); margin: 8px 0; }
+  #sidebar h3.section2 { margin-top: 4px; }
+  .cmd-progress-list { overflow-y: auto; flex: 1; padding-bottom: 8px; }
+  .cmd-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .cmd-progress-item.done { color: var(--green); }
+  .cmd-progress-item .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border); flex-shrink: 0;
+  }
+  .cmd-progress-item.done .dot { background: var(--green); }
+
+  /* TERMINAL */
+  #terminal-wrap {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #010409;
+  }
+  #terminal-titlebar {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .dot-red { width: 12px; height: 12px; border-radius: 50%; background: #f85149; }
+  .dot-yellow { width: 12px; height: 12px; border-radius: 50%; background: #e3b341; }
+  .dot-green { width: 12px; height: 12px; border-radius: 50%; background: #39d353; }
+  #terminal-titlebar span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 8px;
+  }
+  #terminal-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    scroll-behavior: smooth;
+  }
+  .t-line { white-space: pre-wrap; word-break: break-all; }
+  .t-prompt { color: var(--green); }
+  .t-cmd { color: var(--text-bright); }
+  .t-out { color: var(--text); }
+  .t-err { color: var(--red); }
+  .t-info { color: var(--blue); }
+  .t-highlight { color: var(--yellow); }
+  .t-success { color: var(--green); }
+  .t-system { color: var(--purple); }
+
+  #terminal-input-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+    flex-shrink: 0;
+    background: #010409;
+  }
+  #terminal-prompt-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--green);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #terminal-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-bright);
+    caret-color: var(--green);
+  }
+  #cmd-hint {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 0 16px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-style: italic;
+    flex-shrink: 0;
+  }
+
+  /* INTEL PANEL */
+  #intel-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #intel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .intel-tab {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-align: center;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .intel-tab:hover { color: var(--text); }
+  .intel-tab.active { color: var(--text-bright); border-bottom-color: var(--green); }
+  #intel-content { flex: 1; overflow-y: auto; padding: 16px; }
+
+  .intel-section { display: none; }
+  .intel-section.visible { display: block; }
+
+  .intel-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .intel-card h4 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .intel-card h4.offensive { color: var(--orange); }
+  .intel-card h4.exam { color: var(--blue); }
+  .intel-card h4.defence { color: var(--green); }
+  .intel-card p { font-size: 12.5px; line-height: 1.6; color: var(--text); margin-bottom: 8px; }
+  .intel-card p:last-child { margin-bottom: 0; }
+  .intel-card code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--yellow);
+  }
+  .intel-card ul { padding-left: 16px; }
+  .intel-card li { font-size: 12.5px; line-height: 1.7; color: var(--text); }
+  .intel-highlight {
+    background: var(--orange-dim);
+    border: 1px solid var(--orange);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--orange);
+    margin-bottom: 10px;
+  }
+  .exam-point {
+    background: var(--blue-dim);
+    border-left: 3px solid var(--blue);
+    padding: 8px 12px;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .defence-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+  }
+  .defence-item::before { content: "✓"; color: var(--green); flex-shrink: 0; font-weight: 700; }
+
+  #intel-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--muted);
+    text-align: center;
+    gap: 12px;
+  }
+  #intel-placeholder .placeholder-icon { font-size: 40px; opacity: 0.4; }
+  #intel-placeholder p { font-size: 13px; line-height: 1.6; max-width: 240px; }
+
+  /* Command ref quick panel */
+  #quickref { padding: 0; }
+  .qr-group { margin-bottom: 16px; }
+  .qr-group h4 { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 8px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .qr-cmd {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 0;
+    border-bottom: 1px solid #1c2330;
+    cursor: pointer;
+  }
+  .qr-cmd:hover .qr-cmd-text { color: var(--green); }
+  .qr-cmd-text { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text); word-break: break-all; }
+  .qr-cmd-desc { font-size: 11px; color: var(--muted); }
+  .qr-click-hint { font-size: 10px; color: var(--green); opacity: 0; }
+  .qr-cmd:hover .qr-click-hint { opacity: 1; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">SNMP<span>-lab</span> v2</div>
+  <span class="badge badge-cpsa">CREST CPSA</span>
+  <span class="badge badge-safe">Safe Simulation</span>
+  <div id="progress-wrap">
+    <span>Progress</span>
+    <div id="progress-bar-outer"><div id="progress-bar-inner"></div></div>
+    <span id="progress-label">0 / 39</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <h3>Target Hosts</h3>
+    <div id="host-list"></div>
+    <div class="divider"></div>
+    <h3 class="section2">Commands Run</h3>
+    <div class="cmd-progress-list" id="cmd-progress-list"></div>
+  </div>
+
+  <!-- TERMINAL -->
+  <div id="terminal-wrap">
+    <div id="terminal-titlebar">
+      <div class="dot-red"></div><div class="dot-yellow"></div><div class="dot-green"></div>
+      <span id="terminal-title">kali@attacker:~$</span>
+    </div>
+    <div id="terminal-output"></div>
+    <div id="cmd-hint"></div>
+    <div id="terminal-input-row">
+      <span id="terminal-prompt-label">┌──(kali㉿attacker)-[~]<br>└─$&nbsp;</span>
+      <input id="terminal-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command or click one from the reference panel →">
+    </div>
+  </div>
+
+  <!-- INTEL PANEL -->
+  <div id="intel-panel">
+    <div id="intel-tabs">
+      <div class="intel-tab active" data-tab="intel">⚔ Intel</div>
+      <div class="intel-tab" data-tab="quickref">📋 Commands</div>
+    </div>
+    <div id="intel-content">
+      <div id="tab-intel" class="intel-section visible">
+        <div id="intel-placeholder">
+          <div class="placeholder-icon">⚡</div>
+          <p>Run a command in the terminal to see offensive intel, CPSA exam notes, and defensive controls.</p>
+        </div>
+        <div id="intel-cards" style="display:none"></div>
+      </div>
+      <div id="tab-quickref" class="intel-section" id="quickref"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+
+const HOSTS = [
+  { id:'rtr01', ip:'192.168.1.1',  name:'CORE-RTR-01',   desc:'Cisco IOS Core Router',         tags:['v2c','telnet'] },
+  { id:'sw01',  ip:'192.168.1.2',  name:'ACCESS-SW-01',  desc:'Cisco Catalyst 2960 Switch',     tags:['v1'] },
+  { id:'rtr02', ip:'10.10.0.1',    name:'BACKUP-RTR-01', desc:'Legacy Cisco Router',            tags:['v2c','telnet','tftp'] },
+  { id:'tftp',  ip:'192.168.1.50', name:'TFTP-SRV-01',   desc:'Linux TFTP Server',              tags:['noauth'] },
+  { id:'fw01',  ip:'192.168.10.5', name:'FW-01',         desc:'FortiGate Firewall',             tags:['http'] },
+];
+
+// Community strings
+const COMMUNITIES = { public: true, private: true, internal: true, admin: true, cisco: true };
+
+// ─── COMMAND DATABASE ───────────────────────────────────────────────────────
+// Each command: { pattern (regex), output (fn or string), intel: {offensive, exam, defence} }
+
+const COMMANDS = [
+
+  // ── NMAP SNMP DISCOVERY ──
+  {
+    id:'nmap_udp_snmp',
+    ref:'1', group:'Discovery',
+    syntax:'nmap -sU -p 161 <target>',
+    desc:'UDP scan port 161 (SNMP)',
+    pattern: /nmap\s+-sU\s+-p\s*161\s+([\d.]+)/,
+    output: (m) => `Starting Nmap 7.94 ( https://nmap.org )
+Nmap scan report for ${m[1]}
+Host is up (0.0012s latency).
+
+PORT    STATE         SERVICE
+161/udp open|filtered snmp
+
+Nmap done: 1 IP address (1 host up) scanned in 2.14 seconds`,
+    intel: {
+      offensive:`SNMP runs on UDP/161. A filtered result is common — firewalls often block ICMP but leave SNMP open. Even "open|filtered" means the port is worth probing further with authentication.`,
+      exam:[`SNMP uses UDP port 161 (agent) and UDP port 162 (trap/manager)`,`-sU performs a UDP scan; default TCP scans miss SNMP entirely`,`"open|filtered" means Nmap can't determine if filtered or open — typical for UDP`],
+      defence:[`Block UDP/161 at the perimeter firewall`,`Allow SNMP only from specific management station IPs`,`Use SNMP v3 with authentication to reduce blind enumeration value`]
+    }
+  },
+  {
+    id:'nmap_snmp_scripts',
+    ref:'2', group:'Discovery',
+    syntax:'nmap -sU -p 161 --script snmp-info <target>',
+    desc:'Run SNMP NSE scripts',
+    pattern: /nmap\s+.*--script\s+snmp[\w-]+\s+([\d.]+)/,
+    output: (m) => `Starting Nmap 7.94
+Nmap scan report for ${m[1]}
+Host is up.
+
+PORT    STATE SERVICE
+161/udp open  snmp
+| snmp-info:
+|   enterprise: cisco
+|   engineIDFormat: mac
+|   engineIDData: a1:b2:c3:d4:e5:f6
+|   snmpEngineBoots: 47
+|_  snmpEngineTime: 12d1h33m22s
+
+Nmap done: 1 IP address scanned in 5.22 seconds`,
+    intel: {
+      offensive:`NSE scripts automate fingerprinting. Enterprise OID confirms this is Cisco hardware. Engine boots (47) and uptime reveal the device hasn't been rebooted in weeks — stable target, config unlikely to have changed recently.`,
+      exam:[`Nmap NSE scripts for SNMP: snmp-info, snmp-sysdescr, snmp-brute, snmp-interfaces`,`snmp-info retrieves engine ID, enterprise OID, and uptime`,`snmpEngineBoots tracks how many times the SNMP engine has restarted`],
+      defence:[`Restrict SNMP responses to authorised management IPs only`,`SNMPv3 engineID exposure is unavoidable but authentication limits usefulness`]
+    }
+  },
+  {
+    id:'nmap_snmp_range',
+    ref:'3', group:'Discovery',
+    syntax:'nmap -sU -p 161 192.168.1.0/24',
+    desc:'Sweep subnet for SNMP hosts',
+    pattern: /nmap\s+-sU\s+-p\s*161\s+([\d.]+\/\d+)/,
+    output: (m) => `Starting Nmap 7.94
+Nmap scan report for 192.168.1.1
+161/udp open  snmp
+
+Nmap scan report for 192.168.1.2
+161/udp open  snmp
+
+Nmap scan report for 192.168.1.50
+161/udp open|filtered snmp
+
+Nmap done: 256 IP addresses (3 hosts up) scanned in 38.71 seconds`,
+    intel: {
+      offensive:`Three SNMP-enabled hosts found on the /24. 192.168.1.1 and .2 are the priority — both showing open. 192.168.1.50 is the TFTP server. This gives us our full attack surface before any community string bruteforce.`,
+      exam:[`Scanning full subnets with UDP is slow — Nmap defaults to sending 1 probe per port`,`Use --min-rate to speed up at the cost of accuracy`,`CIDR /24 = 256 addresses, /16 = 65536`],
+      defence:[`Network segmentation — management VLAN isolation prevents subnet sweeps from user VLANs`,`IDS/IPS signatures can detect SNMP sweep patterns`]
+    }
+  },
+
+  // ── ONESIXTYONE ──
+  {
+    id:'161_basic',
+    ref:'4', group:'Community String Bruteforce',
+    syntax:'onesixtyone 192.168.1.1 public',
+    desc:'Test single community string',
+    pattern: /onesixtyone\s+([\d.]+)\s+([\w]+)/,
+    output: (m) => `Scanning 1 hosts, 1 communities
+${m[1]} [${m[2]}] Cisco IOS Software, Version 12.4(24)T4, RELEASE SOFTWARE (fc2)`,
+    intel: {
+      offensive:`Bingo — community string "${m2last()}" is valid. The sysDescr response confirms Cisco IOS 12.4(24)T4 — an old, likely unpatched version. We now have read access to the entire SNMP MIB tree.`,
+      exam:[`onesixtyone is a fast SNMP community string bruteforcer`,`Default community strings: public (read-only), private (read-write)`,`SNMPv1 and v2c have no encryption — community strings travel in plaintext`],
+      defence:[`Rename default community strings to something non-guessable`,`Implement SNMP access control lists on Cisco: snmp-server community <string> RO <ACL>`,`SNMPv3 replaces community strings with username/password + encryption`]
+    }
+  },
+  {
+    id:'161_wordlist',
+    ref:'5', group:'Community String Bruteforce',
+    syntax:'onesixtyone -c /usr/share/doc/onesixtyone/dict.txt 192.168.1.1',
+    desc:'Bruteforce with wordlist',
+    pattern: /onesixtyone\s+-c\s+([\S]+)\s+([\d.]+)/,
+    output: (m) => `Scanning 1 hosts, 50 communities
+${m[2]} [public] Cisco IOS Software, Version 12.4(24)T4
+${m[2]} [private] Cisco IOS Software, Version 12.4(24)T4
+${m[2]} [internal] Cisco IOS Software, Version 12.4(24)T4`,
+    intel: {
+      offensive:`Three valid community strings found. "private" gives READ-WRITE access — we can now write to the MIB, meaning we could change routing tables, push configs, or reload the device. "internal" suggests someone customised the strings but used a weak value still in standard wordlists.`,
+      exam:[`onesixtyone wordlist bruteforce is standard CPSA technique`,`public = typically RO, private = typically RW`,`Having RW community string = potential to modify device configuration via SNMP SET`],
+      defence:[`Rate limiting SNMP at perimeter — block repeated UDP/161 probes from same source`,`Account lockout isn't native to SNMP — makes bruteforcing trivial`,`SNMPv3 supports auth failure logging and rate limiting per user`]
+    }
+  },
+  {
+    id:'161_multihost',
+    ref:'6', group:'Community String Bruteforce',
+    syntax:'onesixtyone -c /usr/share/doc/onesixtyone/dict.txt -i hosts.txt',
+    desc:'Bruteforce multiple hosts',
+    pattern: /onesixtyone\s+-c\s+\S+\s+-i\s+\S+/,
+    output: () => `Scanning 5 hosts, 50 communities
+192.168.1.1 [public] Cisco IOS Software, Version 12.4(24)T4
+192.168.1.1 [private] Cisco IOS Software, Version 12.4(24)T4
+192.168.1.2 [public] Cisco Catalyst 2960 Software (C2960-LANBASEK9-M)
+10.10.0.1 [public] Cisco IOS Software, Version 12.2(33)
+10.10.0.1 [cisco] Cisco IOS Software, Version 12.2(33)`,
+    intel: {
+      offensive:`Full network picture: all three Cisco devices respond to "public". The switch (192.168.1.2) only exposes v1. The legacy backup router uses a custom string "cisco" — still guessable. TFTP server and firewall don't respond to SNMP, but are still in scope via other vectors.`,
+      exam:[`-i flag accepts a file of target IPs, one per line`,`Correlate community strings across hosts — reuse is common in enterprise networks`,`SNMPv1 on the switch means no bulk operations — but still readable`],
+      defence:[`Central SNMP management policy — ensure all devices use the same hardened config baseline`,`Regular audits to detect devices using default or weak community strings`]
+    }
+  },
+
+  // ── BRAA ──
+  {
+    id:'braa_basic',
+    ref:'7', group:'Community String Bruteforce',
+    syntax:'braa public@192.168.1.1:.1.3.6.*',
+    desc:'Mass SNMP query with braa',
+    pattern: /braa\s+([\w]+)@([\d.]+):([\S]+)/,
+    output: () => `192.168.1.1:79ms:.1.3.6.1.2.1.1.1.0:Cisco IOS Software, Version 12.4(24)T4
+192.168.1.1:79ms:.1.3.6.1.2.1.1.2.0:enterprises.9.1.620
+192.168.1.1:81ms:.1.3.6.1.2.1.1.3.0:12 days, 1:33:22.00
+192.168.1.1:82ms:.1.3.6.1.2.1.1.4.0:admin@corp.local
+192.168.1.1:82ms:.1.3.6.1.2.1.1.5.0:CORE-RTR-01
+192.168.1.1:83ms:.1.3.6.1.2.1.1.6.0:Server Room, Rack 3`,
+    intel: {
+      offensive:`braa sends all queries in a single packet burst — extremely fast. Look at the output: sysContact reveals admin@corp.local (email for social engineering), sysName confirms hostname, sysLocation leaks physical location (Server Room, Rack 3). This is pre-phishing gold.`,
+      exam:[`braa is designed for mass SNMP enumeration, faster than snmpwalk for multi-host`,`OID .1.3.6.1.2.1.1 = sysGroup (system description table)`,`sysContact (.1.4.0), sysName (.1.5.0), sysLocation (.1.6.0) are key recon OIDs`],
+      defence:[`Set sysContact, sysName, sysLocation to non-revealing values`,`Consider whether SNMP is needed at all — disable if not required`,`SNMPv3 encrypts the community string equivalent (auth + priv)`]
+    }
+  },
+
+  // ── SNMP-CHECK ──
+  {
+    id:'snmpcheck_basic',
+    ref:'8', group:'Full Enumeration',
+    syntax:'snmp-check 192.168.1.1',
+    desc:'Full auto-enumeration (default public)',
+    pattern: /snmp-check\s+([\d.]+)(?:\s|$)/,
+    output: (m) => `snmp-check v1.9 - SNMP enumerator
+
+[*] Try to connect to ${m[1]}:161 using SNMPv1 and community 'public'
+
+[*] System information:
+
+  Host IP address               : ${m[1]}
+  Hostname                      : CORE-RTR-01
+  Description                   : Cisco IOS Software, Version 12.4(24)T4
+  Contact                       : admin@corp.local
+  Location                      : Server Room, Rack 3
+  Uptime snmp                   : 12 days, 01:33:22.00
+
+[*] Network information:
+  IP forwarding enabled         : yes
+  Default TTL                   : 255
+
+[*] Network interfaces:
+  Interface                     : [ up ] loopback
+  Id                            : 1
+  Mac Address                   : :::::
+  Type                          : softwareLoopback
+  Speed                         : 10 Mbps
+  MTU                           : 1500
+  In octets                     : 42931
+  Out octets                    : 42931
+
+  Interface                     : [ up ] eth0
+  Id                            : 2
+  Mac Address                   : a1:b2:c3:d4:e5:f6
+  Type                          : ethernetCsmacd
+  Speed                         : 1000 Mbps
+
+[*] Routing information:
+  Destination  Netmask       Next hop     Metric  Interface
+  0.0.0.0      0.0.0.0       10.0.0.1     1       eth0
+  192.168.1.0  255.255.255.0 0.0.0.0      0       eth0
+  10.10.0.0    255.255.0.0   10.0.0.1     1       eth0
+
+[*] TCP connections and listening ports:
+  Local address  Port  Remote address  Port  State
+  0.0.0.0        23    0.0.0.0         0     listen
+  0.0.0.0        22    0.0.0.0         0     listen
+
+[*] Processes:
+  Id    Status  Name
+  1     run     init
+  312   run     telnetd
+  315   run     snmpd`,
+    intel: {
+      offensive:`snmp-check is a one-stop-shop — it dumps everything automatically. Huge finds here: IP forwarding enabled (this device routes traffic — ideal pivot point), Telnet (port 23) is listening (plaintext login vector), routing table shows 10.10.0.0/16 network (previously unknown subnet), and process list confirms telnetd running.`,
+      exam:[`snmp-check automates enumeration of: system info, interfaces, routing, ARP, TCP ports, processes, users`,`IP forwarding = device is a router, can be used as network pivot`,`TCP connections via SNMP reveals open ports without a port scan`],
+      defence:[`Disable Telnet — use SSH only (transport input ssh on Cisco)`,`SNMP process list exposure via HOST-RESOURCES-MIB — restrict community string access`,`Disable IP forwarding if device doesn't need routing functionality`]
+    }
+  },
+  {
+    id:'snmpcheck_community',
+    ref:'9', group:'Full Enumeration',
+    syntax:'snmp-check -c private 192.168.1.1',
+    desc:'Enumerate with private community',
+    pattern: /snmp-check\s+-c\s+([\w]+)\s+([\d.]+)/,
+    output: (m) => `snmp-check v1.9 - SNMP enumerator
+
+[*] Try to connect to ${m[2]}:161 using SNMPv1 and community '${m[1]}'
+
+[*] System information:
+  Host IP address               : ${m[2]}
+  Hostname                      : CORE-RTR-01
+
+[*] Network users:
+  Id     Name              Type
+  1      admin             permanent
+  2      readonly          permanent
+  3      monitor           permanent
+
+[*] Network information:
+  IP forwarding enabled         : yes
+
+[+] Write access confirmed with community '${m[1]}'
+    This allows SNMP SET operations — potential for config modification`,
+    intel: {
+      offensive:`Read-Write confirmed. We can see user accounts: admin, readonly, monitor. With SET access we could attempt to write a new config, enable/disable interfaces, or modify routing entries. On Cisco, SNMP SET to copy running-config to TFTP is a classic attack.`,
+      exam:[`Read-Write community string enables SNMP SET operations`,`CISCO-CONFIG-COPY-MIB allows copying device config via SNMP`,`User enumeration via SNMP is host-resources based — depends on MIB support`],
+      defence:[`Never expose private/RW community string`,`If SNMP management is required, use read-only exclusively`,`Log and alert on SNMP SET operations from unexpected sources`]
+    }
+  },
+
+  // ── SNMPWALK ──
+  {
+    id:'snmpwalk_full',
+    ref:'10', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1',
+    desc:'Full MIB walk (v2c)',
+    pattern: /snmpwalk\s+-v(1|2c|3)\s+-c\s+([\w]+)\s+([\d.]+)(?:\s|$)/,
+    output: (m) => `SNMPv${m[1]} - OIDs from ${m[3]}:
+iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, Version 12.4(24)T4, RELEASE SOFTWARE"
+iso.3.6.1.2.1.1.2.0 = OID: iso.3.6.1.4.1.9.1.620
+iso.3.6.1.2.1.1.3.0 = Timeticks: (1049002) 12 days, 1:33:22.00
+iso.3.6.1.2.1.1.4.0 = STRING: "admin@corp.local"
+iso.3.6.1.2.1.1.5.0 = STRING: "CORE-RTR-01"
+iso.3.6.1.2.1.1.6.0 = STRING: "Server Room, Rack 3"
+iso.3.6.1.2.1.2.1.0 = INTEGER: 3
+iso.3.6.1.2.1.2.2.1.1.1 = INTEGER: 1
+iso.3.6.1.2.1.2.2.1.2.1 = STRING: "lo"
+iso.3.6.1.2.1.2.2.1.2.2 = STRING: "GigabitEthernet0/0"
+iso.3.6.1.2.1.2.2.1.2.3 = STRING: "GigabitEthernet0/1"
+iso.3.6.1.2.1.4.20.1.1.192.168.1.1 = IpAddress: 192.168.1.1
+iso.3.6.1.2.1.4.20.1.1.10.10.0.1 = IpAddress: 10.10.0.1
+iso.3.6.1.2.1.4.21.1.1.0.0.0.0 = IpAddress: 0.0.0.0
+iso.3.6.1.2.1.4.21.1.7.0.0.0.0 = IpAddress: 10.0.0.1
+...
+[output truncated - 847 OIDs retrieved]`,
+    intel: {
+      offensive:`Full walk dumps every OID the device exposes. Key finds: interface names (GigabitEthernet0/0, 0/1), IP addresses on both interfaces (192.168.1.1 and 10.10.0.1 — confirming dual-homed router), routing table including default gateway 10.0.0.1. All 847 OIDs represent the complete device inventory.`,
+      exam:[`snmpwalk traverses the entire MIB tree using GETNEXT operations`,`-v2c = SNMPv2c, -v1 = SNMPv1, -v3 = SNMPv3`,`OID iso.3.6.1.2.1 = mib-2 standard MIB; iso.3.6.1.4.1 = enterprise (vendor-specific) MIBs`],
+      defence:[`View-Based Access Control Model (VACM) — restrict which OIDs each community can access`,`SNMPv3 with contextName restricts MIB tree access per user`,`Consider SNMP proxies that limit which OIDs are exposed externally`]
+    }
+  },
+  {
+    id:'snmpwalk_sysinfo',
+    ref:'11', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.1',
+    desc:'Walk system info OID only',
+    pattern: /snmpwalk\s+.*\s+([\d.]+)\s+1\.3\.6\.1\.2\.1\.1/,
+    output: (m) => `iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, Version 12.4(24)T4"
+iso.3.6.1.2.1.1.2.0 = OID: iso.3.6.1.4.1.9.1.620
+iso.3.6.1.2.1.1.3.0 = Timeticks: (1049002) 12 days, 1:33:22.00
+iso.3.6.1.2.1.1.4.0 = STRING: "admin@corp.local"
+iso.3.6.1.2.1.1.5.0 = STRING: "CORE-RTR-01"
+iso.3.6.1.2.1.1.6.0 = STRING: "Server Room, Rack 3"
+iso.3.6.1.2.1.1.7.0 = INTEGER: 78`,
+    intel: {
+      offensive:`Targeted OID walk — faster than full walk. sysServices value 78 = binary 1001110 = layer 2 (switching), layer 3 (IP), layer 4 (transport) — confirms this is a layer 3 routing device. Admin email and location already identified for OSINT/phishing.`,
+      exam:[`OID .1.3.6.1.2.1.1 = system group, 7 standard objects`,`sysServices integer uses bit encoding for OSI layers`,`sysObjectID (.1.2.0) identifies vendor/product via enterprise OID`],
+      defence:[`Set sysContact and sysLocation to generic non-identifying values`,`Restrict sysDescr to not reveal exact OS version`]
+    }
+  },
+  {
+    id:'snmpwalk_interfaces',
+    ref:'12', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.2',
+    desc:'Enumerate network interfaces',
+    pattern: /snmpwalk\s+.*\s+([\d.]+)\s+1\.3\.6\.1\.2\.1\.2/,
+    output: (m) => `iso.3.6.1.2.1.2.1.0 = INTEGER: 3
+iso.3.6.1.2.1.2.2.1.1.1 = INTEGER: 1
+iso.3.6.1.2.1.2.2.1.2.1 = STRING: "lo"
+iso.3.6.1.2.1.2.2.1.2.2 = STRING: "GigabitEthernet0/0"
+iso.3.6.1.2.1.2.2.1.2.3 = STRING: "GigabitEthernet0/1"
+iso.3.6.1.2.1.2.2.1.6.1 = Hex-STRING: 00 00 00 00 00 00
+iso.3.6.1.2.1.2.2.1.6.2 = Hex-STRING: A1 B2 C3 D4 E5 F6
+iso.3.6.1.2.1.2.2.1.6.3 = Hex-STRING: A1 B2 C3 D4 E5 F7
+iso.3.6.1.2.1.2.2.1.7.2 = INTEGER: up(1)
+iso.3.6.1.2.1.2.2.1.7.3 = INTEGER: up(1)
+iso.3.6.1.2.1.2.2.1.10.2 = Counter32: 1482910
+iso.3.6.1.2.1.2.2.1.16.2 = Counter32: 2819432`,
+    intel: {
+      offensive:`ifTable (.2.2) reveals all interfaces. Both GigabitEthernet interfaces are UP, with MAC addresses visible. Counter values (in/out octets) show active traffic — this device is live and processing packets. MACs can be used for ARP poisoning prep or to correlate with ARP cache enumeration next.`,
+      exam:[`ifTable OID = .1.3.6.1.2.1.2.2`,`ifOperStatus: up(1), down(2), testing(3)`,`ifPhysAddress = MAC address in Hex-STRING format`],
+      defence:[`ifTable is standard MIB — restrict access via VACM to management hosts only`,`Interface status monitoring is a legitimate use, but limit to authorised NMS`]
+    }
+  },
+  {
+    id:'snmpwalk_routing',
+    ref:'13', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.4.21',
+    desc:'Extract routing table',
+    pattern: /snmpwalk\s+.*\s+([\d.]+)\s+1\.3\.6\.1\.2\.1\.4\.21/,
+    output: (m) => `iso.3.6.1.2.1.4.21.1.1.0.0.0.0 = IpAddress: 0.0.0.0
+iso.3.6.1.2.1.4.21.1.1.10.10.0.0 = IpAddress: 10.10.0.0
+iso.3.6.1.2.1.4.21.1.1.192.168.1.0 = IpAddress: 192.168.1.0
+iso.3.6.1.2.1.4.21.1.1.172.16.50.0 = IpAddress: 172.16.50.0
+iso.3.6.1.2.1.4.21.1.7.0.0.0.0 = IpAddress: 10.0.0.1
+iso.3.6.1.2.1.4.21.1.7.10.10.0.0 = IpAddress: 10.10.0.1
+iso.3.6.1.2.1.4.21.1.7.172.16.50.0 = IpAddress: 172.16.50.1
+iso.3.6.1.2.1.4.21.1.11.0.0.0.0 = INTEGER: 1`,
+    intel: {
+      offensive:`Routing table exposed completely. New finding: 172.16.50.0 network — previously unknown segment, likely an internal management network. Gateway 172.16.50.1 is a new target. This is exactly how attackers map internal networks without touching the hosts themselves — pure passive SNMP recon from one device.`,
+      exam:[`ipRouteTable OID = .1.3.6.1.2.1.4.21`,`RFC 1918 private address spaces: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16`,`ipRouteNextHop (.1.7) = next hop gateway for each route`],
+      defence:[`Routing table is critical intel — restrict ipRouteTable OID access via VACM`,`In Cisco: snmp-server view RESTRICT ipRouteTable excluded`,`SNMPv3 with views prevents routing table leakage`]
+    }
+  },
+  {
+    id:'snmpwalk_arp',
+    ref:'14', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.4.22',
+    desc:'Dump ARP cache',
+    pattern: /snmpwalk\s+.*\s+([\d.]+)\s+1\.3\.6\.1\.2\.1\.4\.22/,
+    output: (m) => `iso.3.6.1.2.1.4.22.1.2.2.192.168.1.2 = Hex-STRING: 00 11 22 33 44 55
+iso.3.6.1.2.1.4.22.1.2.2.192.168.1.10 = Hex-STRING: AA BB CC DD EE FF
+iso.3.6.1.2.1.4.22.1.2.2.192.168.1.50 = Hex-STRING: 11 22 33 44 55 66
+iso.3.6.1.2.1.4.22.1.2.3.10.10.0.1 = Hex-STRING: 77 88 99 AA BB CC
+iso.3.6.1.2.1.4.22.1.2.3.172.16.50.5 = Hex-STRING: DE AD BE EF CA FE`,
+    intel: {
+      offensive:`ARP cache reveals every device this router has recently communicated with — IP to MAC mapping. 192.168.1.10 is a new host not previously discovered. 172.16.50.5 is on the management network we found in the routing table. ARP cache enumeration finds hosts that don't respond to ping.`,
+      exam:[`atTable/ipNetToMediaTable OID = .1.3.6.1.2.1.4.22`,`ARP cache entries reveal active hosts on directly connected subnets`,`MAC vendor lookup on the first 3 octets (OUI) identifies hardware manufacturer`],
+      defence:[`ARP table leaks live host inventory — high-value intel for attackers`,`Limit ARP table OID access to NMS host only`,`Dynamic ARP Inspection (DAI) on switches protects against ARP spoofing but doesn't prevent enumeration`]
+    }
+  },
+  {
+    id:'snmpwalk_procs',
+    ref:'15', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.25.4.2',
+    desc:'Enumerate running processes',
+    pattern: /snmpwalk\s+.*\s+([\d.]+)\s+1\.3\.6\.1\.2\.1\.25\.4\.2/,
+    output: (m) => `iso.3.6.1.2.1.25.4.2.1.2.1 = STRING: "init"
+iso.3.6.1.2.1.25.4.2.1.2.2 = STRING: "kthreadd"
+iso.3.6.1.2.1.25.4.2.1.2.312 = STRING: "telnetd"
+iso.3.6.1.2.1.25.4.2.1.2.315 = STRING: "snmpd"
+iso.3.6.1.2.1.25.4.2.1.2.388 = STRING: "sshd"
+iso.3.6.1.2.1.25.4.2.1.2.412 = STRING: "cron"
+iso.3.6.1.2.1.25.4.2.1.2.501 = STRING: "cisco_mgmtd"
+iso.3.6.1.2.1.25.4.2.1.2.598 = STRING: "tftp"`,
+    intel: {
+      offensive:`Process list via SNMP — no port scan needed. telnetd confirmed running (plaintext attack vector), tftp process active (config file download possible), cisco_mgmtd (management daemon). This pre-arms us for the next phase: TFTP config pull. Process list is the roadmap for what attacks are available.`,
+      exam:[`hrSWRunTable OID = .1.3.6.1.2.1.25.4.2 (HOST-RESOURCES-MIB)`,`Process names reveal running services without needing TCP/UDP scan`,`HOST-RESOURCES-MIB also exposes storage, users, and software inventory`],
+      defence:[`Disable HOST-RESOURCES-MIB access if not needed for monitoring`,`Ensure SNMP view configuration excludes hrSWRunTable for public community`,`Running unnecessary services (TFTP, Telnet) increases attack surface regardless of SNMP`]
+    }
+  },
+  {
+    id:'snmpwalk_users',
+    ref:'16', group:'MIB Walking',
+    syntax:'snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.4.1.9.9.392',
+    desc:'Cisco user table (enterprise OID)',
+    pattern: /snmpwalk\s+.*\s+([\d.]+)\s+1\.3\.6\.1\.4\.1\.9/,
+    output: (m) => `iso.3.6.1.4.1.9.9.392.1.3.21.7.100.101.102.97.117.108.116 = STRING: "default"
+iso.3.6.1.4.1.9.9.392.1.3.21.5.97.100.109.105.110 = STRING: "admin"
+iso.3.6.1.4.1.9.9.392.1.3.21.5.103.117.101.115.116 = STRING: "guest"
+iso.3.6.1.4.1.9.9.392.1.3.21.8.109.111.110.105.116.111.114 = STRING: "monitor"`,
+    intel: {
+      offensive:`Cisco enterprise MIB exposes local user accounts: default, admin, guest, monitor. These are login candidates for Telnet/SSH brute force. "guest" and "default" are classic weak accounts. This gives us a username list without any scanning — pure SNMP intel feeding the next attack phase.`,
+      exam:[`Enterprise OIDs start with .1.3.6.1.4.1 followed by vendor enterprise number`,`Cisco enterprise number = 9`,`Enterprise MIBs are vendor-specific — Cisco, Juniper, HP all have different OID trees`],
+      defence:[`Remove default and guest accounts: no username guest, no username default`,`Rename admin accounts to non-standard names`,`Disable Cisco enterprise MIB user table access in community view configuration`]
+    }
+  },
+
+  // ── SNMPBULKWALK ──
+  {
+    id:'bulkwalk_full',
+    ref:'17', group:'MIB Walking',
+    syntax:'snmpbulkwalk -v2c -c public 192.168.1.1',
+    desc:'Faster bulk walk (v2c only)',
+    pattern: /snmpbulkwalk\s+.*\s+([\d.]+)(?:\s|$)/,
+    output: (m) => `iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, Version 12.4(24)T4"
+iso.3.6.1.2.1.1.4.0 = STRING: "admin@corp.local"
+iso.3.6.1.2.1.1.5.0 = STRING: "CORE-RTR-01"
+iso.3.6.1.2.1.2.2.1.2.2 = STRING: "GigabitEthernet0/0"
+iso.3.6.1.2.1.2.2.1.2.3 = STRING: "GigabitEthernet0/1"
+iso.3.6.1.2.1.4.20.1.1.192.168.1.1 = IpAddress: 192.168.1.1
+iso.3.6.1.2.1.4.20.1.1.10.10.0.1 = IpAddress: 10.10.0.1
+iso.3.6.1.2.1.4.21.1.7.0.0.0.0 = IpAddress: 10.0.0.1
+...
+[1,284 OIDs retrieved in 3.2 seconds vs 18.4s for snmpwalk]`,
+    intel: {
+      offensive:`GETBULK is v2c/v3 only — retrieves multiple OIDs per packet, dramatically faster than snmpwalk's GETNEXT. In a time-limited pentest, speed matters. The 1,284 OID count vs snmpwalk's 847 suggests bulk also captures sub-OIDs that individual walks might miss.`,
+      exam:[`snmpbulkwalk uses GETBULK operation (SNMPv2c+) vs GETNEXT (v1)`,`Cannot use snmpbulkwalk against SNMPv1 devices — use snmpwalk -v1 instead`,`GETBULK retrieves up to max-repetitions OIDs per request (default 10)`],
+      defence:[`Same mitigations as snmpwalk — GETBULK is a legitimate SNMP operation`,`Rate limiting at firewall/device level can slow bulk operations`]
+    }
+  },
+
+  // ── SNMPGET ──
+  {
+    id:'snmpget_sysname',
+    ref:'18', group:'Targeted Queries',
+    syntax:'snmpget -v2c -c public 192.168.1.1 1.3.6.1.2.1.1.5.0',
+    desc:'Get single OID (hostname)',
+    pattern: /snmpget\s+.*\s+([\d.]+)\s+([\d.]+)/,
+    output: (m) => `iso.3.6.1.2.1.1.5.0 = STRING: "CORE-RTR-01"`,
+    intel: {
+      offensive:`snmpget retrieves a single, specific OID. Fast and quiet — minimal traffic, harder to detect than a full walk. Useful mid-engagement when you just need one piece of data, or to verify a suspected OID value before scripting a larger operation.`,
+      exam:[`snmpget = SNMP GET operation, retrieves exact OID`,`OID .1.3.6.1.2.1.1.5.0 = sysName (hostname)`,`Must specify exact OID including .0 instance identifier for scalar objects`],
+      defence:[`Single GET operations are low-noise but pattern of specific OID queries can indicate enumeration`,`SNMPv3 logging captures individual GET operations per user`]
+    }
+  },
+  {
+    id:'snmpget_version',
+    ref:'19', group:'Targeted Queries',
+    syntax:'snmpget -v1 -c public 192.168.1.2 1.3.6.1.2.1.1.1.0',
+    desc:'Query switch using SNMPv1',
+    pattern: /snmpget\s+-v1\s+-c\s+([\w]+)\s+([\d.]+)/,
+    output: (m) => `iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C2960-LANBASEK9-M, Version 12.2(58)SE2"`,
+    intel: {
+      offensive:`SNMPv1 confirmed working on the switch (192.168.1.2). IOS 12.2(58)SE2 on a Catalyst 2960 is end-of-support hardware. SNMPv1 has no authentication beyond the community string — no message integrity, no encryption. Community string visible in Wireshark capture.`,
+      exam:[`SNMPv1 weaknesses: no encryption, no authentication beyond community string, vulnerable to replay attacks`,`SNMPv2c adds GETBULK and 64-bit counters but retains v1 security weaknesses`,`SNMPv3 adds: AuthNoPriv (authentication only), AuthPriv (auth + AES/DES encryption)`],
+      defence:[`Upgrade all devices to SNMPv3 with authPriv security level`,`If v1/v2c required, isolate to management VLAN with ACL`,`Catalyst 2960: snmp-server group V3GROUP v3 priv`]
+    }
+  },
+
+  // ── SNMPSET ──
+  {
+    id:'snmpset_sysname',
+    ref:'20', group:'SNMP Write (SET)',
+    syntax:'snmpset -v2c -c private 192.168.1.1 1.3.6.1.2.1.1.5.0 s HACKED-RTR',
+    desc:'Write to OID (change hostname)',
+    pattern: /snmpset\s+.*-c\s+([\w]+)\s+([\d.]+)\s+([\d.]+)\s+s\s+(\S+)/,
+    output: (m) => `iso.3.6.1.2.1.1.5.0 = STRING: "${m[4]}"`,
+    intel: {
+      offensive:`SNMP SET with private (RW) community string — we just modified a live device's hostname. This demonstrates RW access is real. On a real engagement this would be used to: pull config via TFTP, modify routes, enable/disable interfaces, or write a new community string to maintain persistence.`,
+      exam:[`SNMP SET requires read-write community string`,`snmpset syntax: -v2c -c <community> <host> <OID> <type> <value>`,`Type codes: s=string, i=integer, a=IP address, x=hex, t=timeticks, o=OID`],
+      defence:[`Never configure a read-write community string unless absolutely required`,`Cisco: snmp-server community public RO — RO forces read-only`,`SNMP traps can alert on SET operations: configure SNMP trap for write attempts`]
+    }
+  },
+  {
+    id:'snmpset_tftp_copy',
+    ref:'21', group:'SNMP Write (SET)',
+    syntax:'snmpset -v2c -c private 192.168.1.1 1.3.6.1.4.1.9.9.96.1.1.1.1.2.1 i 1',
+    desc:'Trigger TFTP config copy (Cisco)',
+    pattern: /snmpset\s+.*1\.3\.6\.1\.4\.1\.9\.9\.96/,
+    output: () => `iso.3.6.1.4.1.9.9.96.1.1.1.1.2.1 = INTEGER: 1
+[*] CISCO-CONFIG-COPY-MIB triggered
+[*] Router will copy running-config to TFTP server 192.168.1.50
+[*] Config copy initiated successfully`,
+    intel: {
+      offensive:`CISCO-CONFIG-COPY-MIB — the crown jewel of SNMP attacks against Cisco devices. A series of SNMP SETs instructs the router to copy its running configuration to a TFTP server we control. The resulting file contains: all interface IPs, routing config, access credentials (type 7 passwords — reversible), VPN keys, and ACLs.`,
+      exam:[`CISCO-CONFIG-COPY-MIB OID base: .1.3.6.1.4.1.9.9.96`,`Requires read-write community string and TFTP server reachable from device`,`Type 7 passwords in Cisco configs are obfuscated, not encrypted — trivially reversible`],
+      defence:[`Remove RW community string completely`,`Block outbound TFTP (UDP/69) from network devices via ACL`,`service password-encryption in Cisco config applies type 7 — not a security control, just obfuscation — use secret (MD5) instead`]
+    }
+  },
+
+  // ── SNMP-ENUM ──
+  {
+    id:'snmpenum_basic',
+    ref:'22', group:'Full Enumeration',
+    syntax:'snmp-enum -t 192.168.1.1 -s public',
+    desc:'snmp-enum automated enumeration',
+    pattern: /snmp-enum\s+-t\s+([\d.]+)\s+-s\s+([\w]+)/,
+    output: (m) => `[*] Enumerating ${m[1]} with community '${m[2]}'
+
+[SYSTEM]
+sysDescr    : Cisco IOS Software, Version 12.4(24)T4
+sysUpTime   : 12 days, 1:33:22
+sysContact  : admin@corp.local
+sysName     : CORE-RTR-01
+sysLocation : Server Room, Rack 3
+
+[INTERFACES] 3 interfaces found
+  GigabitEthernet0/0 - UP - 1000Mbps
+  GigabitEthernet0/1 - UP - 1000Mbps
+
+[USERS]
+  admin, monitor, readonly, guest
+
+[PROCESSES] 6 found
+  telnetd, snmpd, sshd, cron, tftp
+
+[STORAGE]
+  /dev/sda1   - 2.1 GB total, 812 MB free`,
+    intel: {
+      offensive:`snmp-enum presents data in a clean, categorised format — great for report writing. Storage info reveals device has local disk (unusual for a router — may be running as a VM). Combined with the user list and process list, we now have a complete target profile.`,
+      exam:[`snmp-enum is a Perl-based enumeration tool, similar to snmp-check`,`Both tools use public SNMP MIBs — no vendor-specific knowledge needed`,`Storage enumeration via hrStorageTable OID: .1.3.6.1.2.1.25.2.3`],
+      defence:[`Storage table (hrStorageTable) reveals disk info — restrict in SNMP view`,`Consolidate all SNMP enumeration findings in pentest report as single vulnerability finding`]
+    }
+  },
+
+  // ── TFTP ──
+  {
+    id:'tftp_get_config',
+    ref:'23', group:'TFTP Config Pull',
+    syntax:'tftp 192.168.1.50',
+    desc:'Connect to TFTP server',
+    pattern: /^tftp\s+([\d.]+)/,
+    output: (m) => `tftp> `,
+    intel: {
+      offensive:`Connected to TFTP server (no authentication required). TFTP (Trivial FTP) has zero authentication — any file on the server is available to anyone who can reach UDP/69. Next step: request the Cisco config file that was copied here by our SNMP SET attack.`,
+      exam:[`TFTP uses UDP port 69`,`TFTP has NO authentication mechanism — by design`,`TFTP is used in legacy Cisco environments for config backup, IOS image transfer, and zero-touch provisioning`],
+      defence:[`Replace TFTP with SCP or SFTP for all file transfers`,`Block UDP/69 at the perimeter and between VLANs`,`If TFTP must run, restrict source IPs via firewall rule`]
+    }
+  },
+  {
+    id:'tftp_get_file',
+    ref:'24', group:'TFTP Config Pull',
+    syntax:'get router-config.txt',
+    desc:'Download device config from TFTP',
+    pattern: /^get\s+([\S]+)/,
+    output: (m) => `Received 4182 bytes in 0.1 seconds`,
+    intel: {
+      offensive:`Config file downloaded. This file will contain: hostname, interface IPs, routing config, access-list rules (firewall policy), VTY line passwords (type 7 — reversible), enable password (type 7), SNMP community strings in plaintext, and potentially VPN shared keys. One file = total device compromise.`,
+      exam:[`TFTP file transfer uses 512-byte blocks by default`,`Cisco running-config filename is typically "hostname-confg" format`,`TFTP is used in PXE boot, network device provisioning, and legacy backup systems`],
+      defence:[`Never backup sensitive configs to unauthenticated TFTP servers`,`Use Cisco Archive feature with SCP: ip scp server enable`,`Encrypt sensitive config files before transfer`]
+    }
+  },
+  {
+    id:'tftp_cat_config',
+    ref:'25', group:'TFTP Config Pull',
+    syntax:'cat router-config.txt',
+    desc:'Read downloaded Cisco config',
+    pattern: /^cat\s+([\S]+)/,
+    output: () => `!
+hostname CORE-RTR-01
+!
+enable password 7 094F471A1A0A
+!
+username admin password 7 13061E010803
+username monitor password 7 02050D480809
+!
+interface GigabitEthernet0/0
+ ip address 192.168.1.1 255.255.255.0
+!
+interface GigabitEthernet0/1
+ ip address 10.10.0.1 255.255.255.0
+!
+snmp-server community public RO
+snmp-server community private RW
+!
+line vty 0 4
+ password 7 060506324F41
+ transport input telnet
+!
+end`,
+    intel: {
+      offensive:`Complete config in plaintext. Three type 7 passwords visible. Type 7 is a simple XOR-based obfuscation — not encryption. Online decryptors and tools like cisco7decrypt will reverse all of these in seconds. We now have the enable password and all VTY (Telnet) credentials. Game over for this device.`,
+      exam:[`Cisco password types: type 0 = plaintext, type 7 = reversible XOR, type 5 = MD5 hash, type 8/9 = bcrypt/scrypt`,`enable password 7 is vulnerable; use enable secret (type 5 minimum) instead`,`transport input telnet = Telnet allowed on VTY lines; should be transport input ssh`],
+      defence:[`Replace all type 7 passwords with enable secret (type 5+)`,`Use transport input ssh only on all VTY lines`,`Remove RW community string from config`]
+    }
+  },
+
+  // ── METASPLOIT ──
+  {
+    id:'msf_scanner',
+    ref:'26', group:'Metasploit Modules',
+    syntax:'msfconsole -q',
+    desc:'Launch Metasploit',
+    pattern: /^msfconsole/,
+    output: () => `       =[ metasploit v6.3.44-dev                          ]
++ -- --=[ 2346 exploits - 1224 auxiliary - 414 post        ]
++ -- --=[ 1427 payloads - 46 encoders - 11 nops            ]
++ -- --=[ 9 evasion                                         ]
+
+msf6 >`,
+    intel: {
+      offensive:`Metasploit loaded. For SNMP we primarily use auxiliary modules — scanners and information gatherers. The key ones: auxiliary/scanner/snmp/snmp_enum, auxiliary/scanner/snmp/snmp_enumshares, auxiliary/scanner/snmp/snmp_login (community bruteforce).`,
+      exam:[`Metasploit has dedicated SNMP auxiliary modules under scanner/snmp/`,`auxiliary modules = non-exploit tools: scanners, fuzzers, credential testers`,`msfconsole -q = quiet mode, suppresses banner`],
+      defence:[`Metasploit SNMP modules are signatures in IDS/IPS systems`,`Suricata/Snort rules detect Metasploit SNMP scanner patterns`]
+    }
+  },
+  {
+    id:'msf_snmp_enum',
+    ref:'27', group:'Metasploit Modules',
+    syntax:'use auxiliary/scanner/snmp/snmp_enum',
+    desc:'Use SNMP enum auxiliary module',
+    pattern: /use\s+auxiliary\/scanner\/snmp\/snmp_enum/,
+    output: () => `msf6 auxiliary(scanner/snmp/snmp_enum) >`,
+    intel: {
+      offensive:`SNMP enum module loaded. This automates the same enumeration as snmp-check but integrates with Metasploit's session management and database. Results go into the MSF database for automatic correlation.`,
+      exam:[`Metasploit module path: type/category/platform/module_name`,`auxiliary = non-exploit, scanner = network scanning category`,`use, set, run/exploit are the three commands for any MSF module`],
+      defence:[`Same defensive controls as manual SNMP enumeration — tools don't change the underlying vulnerability`]
+    }
+  },
+  {
+    id:'msf_set_rhosts',
+    ref:'28', group:'Metasploit Modules',
+    syntax:'set RHOSTS 192.168.1.0/24',
+    desc:'Set target subnet in MSF',
+    pattern: /set\s+RHOSTS\s+([\d./]+)/,
+    output: (m) => `RHOSTS => ${m[1]}`,
+    intel: {
+      offensive:`RHOSTS accepts single IPs, ranges, CIDR notation, or a file path. Setting /24 will run the module against all 256 addresses — Metasploit automatically multi-threads this.`,
+      exam:[`RHOSTS = Remote HOST(S) — the target(s)`,`LHOST = Local HOST — attacker's IP (for reverse shells/payloads)`,`Other common options: RPORT (remote port), COMMUNITY, VERSION, THREADS`],
+      defence:[`Subnet-wide SNMP scanning is high-volume and detectable by network monitoring`]
+    }
+  },
+  {
+    id:'msf_set_community',
+    ref:'29', group:'Metasploit Modules',
+    syntax:'set COMMUNITY public',
+    desc:'Set SNMP community string in MSF',
+    pattern: /set\s+COMMUNITY\s+([\w]+)/,
+    output: (m) => `COMMUNITY => ${m[1]}`,
+    intel: {
+      offensive:`Community string set. Alternatively, set PASS_FILE to a wordlist for bruteforce mode. The module will try each community string against each host in RHOSTS.`,
+      exam:[`Metasploit SNMP modules support: COMMUNITY (single), PASS_FILE (wordlist)`,`Default MSF SNMP wordlist: /usr/share/metasploit-framework/data/wordlists/snmp_default_pass.txt`],
+      defence:[`Wordlist-based bruteforce works because there's no lockout mechanism in SNMPv1/v2c`]
+    }
+  },
+  {
+    id:'msf_run',
+    ref:'30', group:'Metasploit Modules',
+    syntax:'run',
+    desc:'Execute the MSF module',
+    pattern: /^run$|^exploit$/,
+    output: () => `[*] Running module against 256 hosts...
+[+] 192.168.1.1 - System information:
+[+]   Hostname: CORE-RTR-01 | OS: Cisco IOS 12.4
+[+]   Interfaces: 3 | Routes: 6 | Processes: 8
+[+] 192.168.1.2 - System information:
+[+]   Hostname: ACCESS-SW-01 | OS: Cisco Catalyst IOS
+[+] 10.10.0.1 - System information:
+[+]   Hostname: BACKUP-RTR-01 | OS: Cisco IOS 12.2
+[*] Scanned 256 of 256 hosts (100% complete)
+[*] Auxiliary module execution completed`,
+    intel: {
+      offensive:`All three Cisco devices confirmed and profiled. Results automatically stored in the Metasploit database — use "hosts" and "services" commands to query them. This feeds directly into post-exploitation planning.`,
+      exam:[`Results stored in MSF database — query with: hosts, services, vulns`,`[+] = success/finding, [*] = informational, [-] = failure/negative`,`db_export -f xml to export findings for report`],
+      defence:[`Metasploit runs generate multiple failed community attempts before success — detectable in SNMP logs`,`Enable SNMP authentication failure traps to alert on bruteforce attempts`]
+    }
+  },
+
+  // ── CISCO-SPECIFIC ──
+  {
+    id:'cisco_sysdescr',
+    ref:'31', group:'Cisco-Specific',
+    syntax:'snmpget -v2c -c public 10.10.0.1 1.3.6.1.2.1.1.1.0',
+    desc:'Fingerprint backup router',
+    pattern: /snmpget\s+.*\s+10\.10\.0\.1\s+/,
+    output: () => `iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, Version 12.2(33)SXJ10, RELEASE SOFTWARE
+  Copyright (c) 1986-2014 by Cisco Systems, Inc."`,
+    intel: {
+      offensive:`IOS 12.2(33)SXJ10 — released 2014, well past end of support. Multiple known CVEs for this version. The version string alone gives us a vulnerability shortlist to check against. Post-engagement: cross-reference against Cisco's published security advisories.`,
+      exam:[`sysDescr reveals exact software version — critical for vulnerability research`,`Cisco IOS version format: Major.Minor(Maintenance)Train`,`CVE database and Cisco Security Advisories (cisco.com/security) are primary lookup sources`],
+      defence:[`Upgrade IOS to supported version`,`Restrict sysDescr to not expose full version string (enterprise MIB override on some platforms)`]
+    }
+  },
+  {
+    id:'cisco_interface_status',
+    ref:'32', group:'Cisco-Specific',
+    syntax:'snmpwalk -v2c -c public 10.10.0.1 1.3.6.1.2.1.2.2.1.8',
+    desc:'Check interface operational status',
+    pattern: /snmpwalk\s+.*10\.10\.0\.1\s+1\.3\.6\.1\.2\.1\.2\.2\.1\.8/,
+    output: () => `iso.3.6.1.2.1.2.2.1.8.1 = INTEGER: up(1)
+iso.3.6.1.2.1.2.2.1.8.2 = INTEGER: up(1)
+iso.3.6.1.2.1.2.2.1.8.3 = INTEGER: down(2)
+iso.3.6.1.2.1.2.2.1.8.4 = INTEGER: up(1)`,
+    intel: {
+      offensive:`Three interfaces up, one down. Down interface (index 3) is interesting — could be a backup link, an unused port with an IP, or a deliberately disabled interface. The up interfaces are our routing paths. Interface status = network topology mapping.`,
+      exam:[`ifOperStatus: up(1), down(2), testing(3), unknown(4), dormant(5), notPresent(6), lowerLayerDown(7)`,`ifOperStatus ≠ ifAdminStatus — admin can be up while oper is down (link failure)`,`ifIndex is the instance identifier for the interface row in ifTable`],
+      defence:[`Shut down unused interfaces: interface Gi0/3 / shutdown`,`Port security on switch access ports prevents rogue device connection`]
+    }
+  },
+
+  // ── FIREWALL ──
+  {
+    id:'fw_snmp_check',
+    ref:'33', group:'FortiGate Firewall',
+    syntax:'snmp-check -c public 192.168.10.5',
+    desc:'Enumerate FortiGate via SNMP',
+    pattern: /snmp-check\s+.*192\.168\.10\.5/,
+    output: () => `[*] Connecting to 192.168.10.5:161
+
+[*] System information:
+  Hostname    : FW-01
+  Description : Fortigate-200E v6.0.4,build0231,190423
+  Contact     : netops@corp.local
+  Location    : DMZ Rack, Bay 2
+
+[*] Network interfaces:
+  wan1    - 203.0.113.1  - UP
+  lan     - 192.168.1.254 - UP
+  dmz     - 192.168.10.1  - UP
+  mgmt    - 192.168.100.1 - UP
+
+[*] Routing:
+  0.0.0.0/0 via 203.0.113.254 (Internet uplink)
+  192.168.0.0/16 via 192.168.1.254`,
+    intel: {
+      offensive:`FortiGate firewall enumerated via SNMP. Version 6.0.4 build 190423 — 2019 firmware, likely unpatched. Interface layout reveals full network topology: WAN IP (203.0.113.1 — public internet-facing), LAN, DMZ, and management interfaces. The management interface on 192.168.100.1 is a new subnet to probe.`,
+      exam:[`Firewall SNMP enumeration reveals network topology and WAN IP addresses`,`FortiGate enterprise OID: .1.3.6.1.4.1.12356`,`WAN IP from firewall SNMP = perimeter IP without needing external recon`],
+      defence:[`Disable SNMP on internet-facing/DMZ interfaces — management interface only`,`FortiGate: config system snmp community / set hosts (restrict to NMS IP)`,`Upgrade firmware to supported release`]
+    }
+  },
+  {
+    id:'fw_http_enum',
+    ref:'34', group:'FortiGate Firewall',
+    syntax:'curl -I http://192.168.10.5',
+    desc:'Check HTTP management interface',
+    pattern: /curl\s+.*192\.168\.10\.5/,
+    output: () => `HTTP/1.1 200 OK
+Server: xxxxxxxx-xxxxx
+X-Frame-Options: SAMEORIGIN
+Content-Type: text/html
+Set-Cookie: APSCOOKIE_192_168_10_5=Era%3D0%26Payload...
+
+[FortiGate login page detected]`,
+    intel: {
+      offensive:`HTTP management portal exposed. FortiGate running on HTTP (not HTTPS) means login credentials will be visible in Wireshark. The cookie format identifies this as FortiGate — can be used to fingerprint version via default login page. Next step: check for default admin/no-password, or CVE-2022-40684 (auth bypass on FortiOS).`,
+      exam:[`Web management exposure via HTTP = credential interception risk`,`HTTP response headers reveal server type (even when redacted, Set-Cookie format is fingerprinting data)`,`FortiGate CVE-2022-40684 = authentication bypass via specially crafted HTTP requests`],
+      defence:[`Redirect HTTP to HTTPS: config system global / set admin-https-redirect enable`,`Restrict management access by source IP: config system interface / set allowaccess ping https ssh`,`Disable HTTP management entirely`]
+    }
+  },
+
+  // ── SWITCH ──
+  {
+    id:'sw_snmpv1_walk',
+    ref:'35', group:'Switch Enumeration',
+    syntax:'snmpwalk -v1 -c public 192.168.1.2',
+    desc:'Walk Catalyst 2960 (SNMPv1)',
+    pattern: /snmpwalk\s+-v1\s+.*192\.168\.1\.2/,
+    output: () => `iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C2960-LANBASEK9-M, Version 12.2(58)SE2"
+iso.3.6.1.2.1.1.5.0 = STRING: "ACCESS-SW-01"
+iso.3.6.1.2.1.2.2.1.2.1 = STRING: "GigabitEthernet0/1"
+iso.3.6.1.2.1.2.2.1.2.2 = STRING: "GigabitEthernet0/2"
+iso.3.6.1.2.1.2.2.1.2.3 = STRING: "GigabitEthernet0/3"
+[...24 additional interfaces]
+iso.3.6.1.4.1.9.9.68.1.2.1.1.2.1 = INTEGER: 10
+iso.3.6.1.4.1.9.9.68.1.2.1.1.2.2 = INTEGER: 20
+iso.3.6.1.4.1.9.9.68.1.2.1.1.2.3 = INTEGER: 30`,
+    intel: {
+      offensive:`Switch has 27 interfaces total. Enterprise OID .9.9.68 = CISCO-VTP-MIB — the last three values show VLAN IDs 10, 20, 30 are active. VLAN enumeration from SNMP reveals network segmentation without touching the switch directly. VLANs 10/20/30 are new targets to probe.`,
+      exam:[`SNMPv1 required for some legacy devices — use -v1 flag explicitly`,`CISCO-VTP-MIB OID .1.3.6.1.4.1.9.9.68 contains VLAN information`,`VLAN enumeration via SNMP is a technique to discover network segmentation`],
+      defence:[`Upgrade switch to SNMPv3`,`Cisco Catalyst: snmp-server group V3GROUP v3 priv`,`Disable VTP VLAN enumeration if not needed: restrict enterprise MIB access`]
+    }
+  },
+  {
+    id:'sw_mac_table',
+    ref:'36', group:'Switch Enumeration',
+    syntax:'snmpwalk -v1 -c public 192.168.1.2 1.3.6.1.2.1.17.4.3.1.1',
+    desc:'Dump MAC address table from switch',
+    pattern: /snmpwalk\s+.*192\.168\.1\.2\s+1\.3\.6\.1\.2\.1\.17/,
+    output: () => `iso.3.6.1.2.1.17.4.3.1.1.0.17.34.51.68.85 = Hex-STRING: 00 11 22 33 44 55
+iso.3.6.1.2.1.17.4.3.1.1.170.187.204.221.238.255 = Hex-STRING: AA BB CC DD EE FF
+iso.3.6.1.2.1.17.4.3.1.1.17.34.51.68.85.102 = Hex-STRING: 11 22 33 44 55 66
+iso.3.6.1.2.1.17.4.3.1.1.222.173.190.239.202.254 = Hex-STRING: DE AD BE EF CA FE
+iso.3.6.1.2.1.17.4.3.1.1.0.26.52.78.104.130 = Hex-STRING: 00 1A 34 4E 68 82`,
+    intel: {
+      offensive:`Full MAC address table from the switch — every device that has communicated through it. 5 unique MACs = 5 hosts. Cross-reference with router ARP cache to map IP-to-MAC. OUI lookup on each MAC identifies vendor: "DE AD BE EF CA FE" is a VM (virtualised MAC), "00 11 22..." is Cisco.`,
+      exam:[`dot1dTpFdbTable OID = .1.3.6.1.2.1.17.4.3 (BRIDGE-MIB)`,`MAC table = all devices currently/recently connected to the switch`,`OUI (first 3 octets) identifies the hardware manufacturer`],
+      defence:[`MAC table enumeration is very low-noise — hard to detect`,`Port security (sticky MAC) limits the value of MAC table data by ensuring known-good MACs only`]
+    }
+  },
+
+  // ── DEFENSIVE TECHNIQUES ──
+  {
+    id:'snmpv3_test',
+    ref:'37', group:'SNMPv3 & Defence',
+    syntax:'snmpwalk -v3 -l authPriv -u snmpadmin -a SHA -A AuthPass123 -x AES -X PrivPass123 192.168.1.1',
+    desc:'Connect to SNMPv3 (secure)',
+    pattern: /snmpwalk\s+-v3\s+/,
+    output: () => `iso.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, Version 12.4(24)T4"
+iso.3.6.1.2.1.1.5.0 = STRING: "CORE-RTR-01"
+[response encrypted in transit]`,
+    intel: {
+      offensive:`SNMPv3 with authPriv — this is what a properly secured device looks like. Without valid credentials (username + auth password + priv password) you get nothing. No community string to bruteforce. From an attacker's perspective, SNMPv3 without credentials = dead end.`,
+      exam:[`SNMPv3 security levels: noAuthNoPriv (no sec), authNoPriv (MD5/SHA auth only), authPriv (auth + DES/AES encryption)`,`SNMPv3 authentication protocols: MD5 (weak), SHA (use this)`,`SNMPv3 encryption: DES (deprecated), AES-128 (standard), AES-256 (best)`],
+      defence:[`This is the target state — authPriv with SHA + AES-256`,`Cisco config: snmp-server user snmpadmin V3GROUP v3 auth sha AuthPass123 priv aes 256 PrivPass123`,`Rotate SNMPv3 credentials on a schedule — treat like admin passwords`]
+    }
+  },
+  {
+    id:'snmp_null_community',
+    ref:'38', group:'SNMPv3 & Defence',
+    syntax:'onesixtyone -c /usr/share/doc/onesixtyone/dict.txt 192.168.10.5',
+    desc:'Test firewall - SNMPv3 only (hardened)',
+    pattern: /onesixtyone\s+.*192\.168\.10\.5/,
+    output: () => `Scanning 1 hosts, 50 communities
+[no results — all attempts failed]
+
+[Firewall is SNMPv3 only — community string bruteforce ineffective]`,
+    intel: {
+      offensive:`Firewall resisted all community string bruteforce — SNMPv3 only configured. This is the correct hardened state. From an attacker's perspective: no further SNMP-based attack is possible without valid v3 credentials. Move to other attack vectors (HTTP management, CVEs).`,
+      exam:[`SNMPv3-only configuration completely defeats community string bruteforce`,`When SNMP bruteforce fails: pivot to other enumeration techniques`,`Absence of SNMP response can mean: port filtered, SNMPv3 required, or service not running — use nmap to distinguish`],
+      defence:[`Phased SNMP hardening: 1) disable v1/v2c, 2) implement v3 authPriv, 3) restrict to management VLAN, 4) enable SNMP auth failure traps`]
+    }
+  },
+  {
+    id:'final_report',
+    ref:'39', group:'SNMPv3 & Defence',
+    syntax:'snmp-check --version',
+    desc:'Lab complete — review summary',
+    pattern: /snmp-check\s+--version|snmpcheck\s+--version/,
+    output: () => `snmp-check v1.9 - SNMP enumerator by Matteo Cantoni
+
+[LAB COMPLETE]
+
+Hosts enumerated  : 5/5
+Commands run      : see progress sidebar
+Vulnerabilities found:
+  - SNMPv1 in use          (ACCESS-SW-01)
+  - SNMPv2c in use         (CORE-RTR-01, BACKUP-RTR-01)
+  - Default community str  (public, private on 3 hosts)
+  - RW community exposed   (private on CORE-RTR-01)
+  - Telnet enabled         (CORE-RTR-01, BACKUP-RTR-01)
+  - TFTP unauthenticated   (TFTP-SRV-01)
+  - HTTP management        (FW-01)
+  - Outdated firmware      (all devices)`,
+    intel: {
+      offensive:`Lab complete. You've demonstrated the full SNMP attack chain: discovery → community bruteforce → enumeration → routing/ARP/process intel → RW access → TFTP config pull → plaintext password extraction. This is exactly how a real engagement progresses.`,
+      exam:[`CPSA exam covers all techniques practised in this lab`,`Key concepts: SNMPv1/v2c weaknesses, OID structure, community strings, TFTP, Cisco config security`,`Ensure you can explain each vulnerability AND its remediation — CPSA tests both`],
+      defence:[`Full remediation priority: 1) Upgrade to SNMPv3, 2) Disable Telnet, 3) Replace TFTP with SCP, 4) Remove RW community strings, 5) Patch all devices, 6) Segment management traffic to dedicated VLAN`]
+    }
+  },
+];
+
+function m2last() { return ''; } // placeholder for closure
+
+// ─── QUICK REF GROUPS ───────────────────────────────────────────────────────
+const GROUPS_ORDER = ['Discovery','Community String Bruteforce','Full Enumeration','MIB Walking','Targeted Queries','SNMP Write (SET)','TFTP Config Pull','Metasploit Modules','Cisco-Specific','FortiGate Firewall','Switch Enumeration','SNMPv3 & Defence'];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let activeHost = HOSTS[0];
+let completedCmds = new Set();
+let history = [];
+let histIdx = -1;
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function init() {
+  renderHosts();
+  renderCommandProgress();
+  renderQuickRef();
+  printWelcome();
+  setupTabs();
+
+  const input = document.getElementById('terminal-input');
+  input.addEventListener('keydown', onKeyDown);
+  input.focus();
+  document.getElementById('terminal-wrap').addEventListener('click', () => input.focus());
+}
+
+// ─── HOST SIDEBAR ────────────────────────────────────────────────────────────
+function renderHosts() {
+  const el = document.getElementById('host-list');
+  el.innerHTML = '';
+  HOSTS.forEach(h => {
+    const d = document.createElement('div');
+    d.className = 'host-btn' + (h.id === activeHost.id ? ' active' : '');
+    d.innerHTML = `<span class="host-ip">${h.ip}</span><span class="host-name">${h.name}</span><span class="host-tags">${h.tags.map(t=>`<span class="tag tag-${t}">${t.toUpperCase()}</span>`).join('')}</span>`;
+    d.onclick = () => { activeHost = h; renderHosts(); updatePrompt(); };
+    el.appendChild(d);
+  });
+}
+
+function updatePrompt() {
+  document.getElementById('terminal-prompt-label').innerHTML = `┌──(kali㉿attacker)-[~] <span style="color:var(--yellow)">[${activeHost.ip}]</span><br>└─$&nbsp;`;
+}
+
+// ─── COMMAND PROGRESS SIDEBAR ────────────────────────────────────────────────
+function renderCommandProgress() {
+  const el = document.getElementById('cmd-progress-list');
+  el.innerHTML = '';
+  COMMANDS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'cmd-progress-item' + (completedCmds.has(c.id) ? ' done' : '');
+    d.id = 'cprog-' + c.id;
+    d.innerHTML = `<span class="dot"></span>${c.ref}. ${c.syntax.split(' ')[0]}`;
+    el.appendChild(d);
+  });
+  updateProgress();
+}
+
+function updateProgress() {
+  const total = COMMANDS.length;
+  const done = completedCmds.size;
+  const pct = (done / total * 100).toFixed(0);
+  document.getElementById('progress-bar-inner').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${done} / ${total}`;
+}
+
+// ─── QUICK REF ───────────────────────────────────────────────────────────────
+function renderQuickRef() {
+  const el = document.getElementById('tab-quickref');
+  const groups = {};
+  COMMANDS.forEach(c => { if (!groups[c.group]) groups[c.group] = []; groups[c.group].push(c); });
+  let html = '';
+  GROUPS_ORDER.forEach(g => {
+    if (!groups[g]) return;
+    html += `<div class="qr-group"><h4>${g}</h4>`;
+    groups[g].forEach(c => {
+      html += `<div class="qr-cmd" onclick="injectCommand(${JSON.stringify(c.syntax)})">
+        <span class="qr-cmd-text">${c.ref}. ${escHtml(c.syntax)}</span>
+        <span class="qr-cmd-desc">${escHtml(c.desc)}</span>
+        <span class="qr-click-hint">↵ click to run</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  el.innerHTML = `<div id="quickref">${html}</div>`;
+}
+
+function injectCommand(cmd) {
+  // Replace target placeholder with active host IP
+  let filled = cmd.replace(/<target>/g, activeHost.ip)
+                   .replace(/192\.168\.1\.1/g, activeHost.ip)
+                   .replace(/192\.168\.1\.2/g, activeHost.ip)
+                   .replace(/10\.10\.0\.1/g, activeHost.ip)
+                   .replace(/192\.168\.1\.50/g, activeHost.ip)
+                   .replace(/192\.168\.10\.5/g, activeHost.ip);
+
+  // Just fill the input — let user review and hit enter
+  const inp = document.getElementById('terminal-input');
+  inp.value = cmd; // keep original for clarity
+  inp.focus();
+  // Switch to intel tab
+  activateTab('intel');
+}
+
+// ─── TERMINAL ────────────────────────────────────────────────────────────────
+function printWelcome() {
+  const out = document.getElementById('terminal-output');
+  out.innerHTML = `<div class="t-line t-system">╔══════════════════════════════════════════════════════╗</div>
+<div class="t-line t-system">║        SNMP Lab Simulator v2 — CREST CPSA Prep       ║</div>
+<div class="t-line t-system">╚══════════════════════════════════════════════════════╝</div>
+<div class="t-line t-info"></div>
+<div class="t-line t-info">  Simulated network loaded. 5 hosts available.</div>
+<div class="t-line t-info">  Select a host in the sidebar, then type commands.</div>
+<div class="t-line t-info">  Click any command in the 📋 Commands panel to auto-fill.</div>
+<div class="t-line t-info">  Intel panel updates with every command you run.</div>
+<div class="t-line t-info"></div>
+<div class="t-line t-highlight">  Active target: ${activeHost.ip} (${activeHost.name})</div>
+<div class="t-line t-info"></div>`;
+}
+
+function print(text, cls='t-out') {
+  const out = document.getElementById('terminal-output');
+  const lines = text.split('\n');
+  lines.forEach(l => {
+    const d = document.createElement('div');
+    d.className = 't-line ' + cls;
+    d.textContent = l;
+    out.appendChild(d);
+  });
+  out.scrollTop = out.scrollHeight;
+}
+
+function printPrompt(cmd) {
+  const out = document.getElementById('terminal-output');
+  const d = document.createElement('div');
+  d.className = 't-line';
+  d.innerHTML = `<span class="t-prompt">┌──(kali㉿attacker)-[~] [${activeHost.ip}]\n└─$ </span><span class="t-cmd">${escHtml(cmd)}</span>`;
+  out.appendChild(d);
+}
+
+function onKeyDown(e) {
+  const inp = e.target;
+  if (e.key === 'Enter') {
+    const cmd = inp.value.trim();
+    inp.value = '';
+    if (!cmd) return;
+    history.unshift(cmd);
+    histIdx = -1;
+    processCommand(cmd);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (histIdx < history.length - 1) { histIdx++; inp.value = history[histIdx]; }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (histIdx > 0) { histIdx--; inp.value = history[histIdx]; } else { histIdx = -1; inp.value = ''; }
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    // simple autocomplete: find matching command syntax
+    const val = inp.value;
+    const match = COMMANDS.find(c => c.syntax.startsWith(val) && val.length > 0);
+    if (match) inp.value = match.syntax.replace('<target>', activeHost.ip);
+  }
+}
+
+function processCommand(cmd) {
+  printPrompt(cmd);
+
+  // Built-ins
+  if (cmd === 'clear' || cmd === 'cls') { document.getElementById('terminal-output').innerHTML = ''; return; }
+  if (cmd === 'help') {
+    print(`Available tools: nmap, onesixtyone, snmpwalk, snmpbulkwalk, snmpget, snmpset,\n  snmp-check, snmp-enum, braa, tftp, cat, msfconsole, use, set, run, curl\n\nType 'hosts' to list targets. Use UP/DOWN arrows for history. TAB to autocomplete.`, 't-info');
+    return;
+  }
+  if (cmd === 'hosts') {
+    HOSTS.forEach(h => print(`  ${h.ip.padEnd(15)} ${h.name.padEnd(20)} ${h.desc}`, activeHost.ip===h.ip?'t-success':'t-out'));
+    return;
+  }
+  if (cmd === 'clear' || cmd === 'reset') { document.getElementById('terminal-output').innerHTML=''; return; }
+
+  // Match against command database
+  let matched = null;
+  let matchResult = null;
+  for (const c of COMMANDS) {
+    const m = cmd.match(c.pattern);
+    if (m) { matched = c; matchResult = m; break; }
+  }
+
+  if (matched) {
+    const outputText = typeof matched.output === 'function' ? matched.output(matchResult) : matched.output;
+    // small delay for realism
+    setTimeout(() => {
+      print(outputText, 't-out');
+      print('', 't-out');
+      completedCmds.add(matched.id);
+      const el = document.getElementById('cprog-' + matched.id);
+      if (el) { el.className = 'cmd-progress-item done'; }
+      renderCommandProgress();
+      showIntel(matched.intel);
+      activateTab('intel');
+    }, 180);
+  } else {
+    // Try partial match on tool name
+    const tool = cmd.split(' ')[0];
+    const known = ['nmap','onesixtyone','snmpwalk','snmpbulkwalk','snmpget','snmpset','snmp-check','snmp-enum','braa','tftp','msfconsole'];
+    if (known.includes(tool)) {
+      print(`Command not matched — check syntax. Click a command in the 📋 Commands panel or type 'help'.`, 't-err');
+    } else {
+      print(`bash: ${tool}: command not found`, 't-err');
+    }
+    const hint = document.getElementById('cmd-hint');
+    const closest = COMMANDS.find(c => c.syntax.startsWith(tool));
+    if (closest) hint.textContent = `Hint: try — ${closest.syntax}`;
+    else hint.textContent = '';
+  }
+}
+
+// ─── INTEL PANEL ─────────────────────────────────────────────────────────────
+function showIntel(intel) {
+  const placeholder = document.getElementById('intel-placeholder');
+  const cards = document.getElementById('intel-cards');
+  placeholder.style.display = 'none';
+  cards.style.display = 'block';
+
+  let html = `
+    <div class="intel-card">
+      <h4 class="offensive">⚔ Offensive Intel</h4>
+      <p>${intel.offensive}</p>
+    </div>
+    <div class="intel-card">
+      <h4 class="exam">📚 CPSA Exam Relevance</h4>
+      ${intel.exam.map(e=>`<div class="exam-point">${e}</div>`).join('')}
+    </div>
+    <div class="intel-card">
+      <h4 class="defence">🛡 Defence & Remediation</h4>
+      ${intel.defence.map(d=>`<div class="defence-item">${d}</div>`).join('')}
+    </div>`;
+  cards.innerHTML = html;
+  document.getElementById('intel-content').scrollTop = 0;
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.intel-tab').forEach(tab => {
+    tab.onclick = () => activateTab(tab.dataset.tab);
+  });
+}
+function activateTab(name) {
+  document.querySelectorAll('.intel-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.getElementById('tab-intel').classList.toggle('visible', name === 'intel');
+  document.getElementById('tab-quickref').classList.toggle('visible', name === 'quickref');
+}
+
+// ─── UTIL ────────────────────────────────────────────────────────────────────
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+init();
+</script>
+</body>
+</html>
